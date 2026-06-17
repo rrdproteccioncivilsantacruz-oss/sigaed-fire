@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SIGAED FIRE — Detección de Focos Térmicos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Barlow:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+:root{
+  --bg:#0a0b0e;
+  --bg2:#0f1115;
+  --panel:#13161c;
+  --border:#1e2330;
+  --border2:#252b3a;
+  --red:#ff3b30;
+  --orange:#ff6b1a;
+  --yellow:#ffc700;
+  --cyan:#00d4ff;
+  --green:#00e676;
+  --text:#e8ecf4;
+  --text2:#8892a4;
+  --text3:#4a5568;
+  --accent:#ff4d1a;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Barlow',sans-serif;}
+
+/* TOPBAR */
+#topbar{
+  height:52px;background:var(--bg2);border-bottom:1px solid var(--border2);
+  display:flex;align-items:center;padding:0 16px;gap:14px;z-index:1001;position:relative;flex-shrink:0;
+}
+.tb-logo{display:flex;align-items:center;gap:10px;margin-right:4px;}
+.tb-logo-icon{
+  width:34px;height:34px;background:linear-gradient(135deg,#ff3b30,#ff6b1a);
+  border-radius:8px;display:flex;align-items:center;justify-content:center;
+  font-size:18px;box-shadow:0 0 16px rgba(255,59,48,0.4);flex-shrink:0;
+}
+.tb-logo-text{line-height:1;}
+.tb-logo-text .t1{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:16px;letter-spacing:2px;color:#fff;}
+.tb-logo-text .t2{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text2);letter-spacing:1px;}
+.tb-sep{width:1px;height:28px;background:var(--border2);}
+.tb-label{font-size:10px;color:var(--text3);font-weight:600;letter-spacing:1.5px;text-transform:uppercase;white-space:nowrap;}
+.tb-val{font-family:'Share Tech Mono',monospace;font-size:12px;color:var(--text);background:var(--panel);border:1px solid var(--border2);border-radius:6px;padding:4px 10px;white-space:nowrap;}
+.tb-val select{background:none;border:none;color:var(--text);font-family:'Share Tech Mono',monospace;font-size:12px;outline:none;cursor:pointer;}
+.tb-val select option{background:var(--panel);}
+#btn-load{
+  margin-left:auto;padding:6px 18px;background:linear-gradient(135deg,#ff3b30,#ff6b1a);
+  border:none;border-radius:6px;color:#fff;font-family:'Rajdhani',sans-serif;
+  font-weight:700;font-size:14px;letter-spacing:1.5px;cursor:pointer;
+  box-shadow:0 0 14px rgba(255,59,48,0.35);transition:all .2s;white-space:nowrap;
+}
+#btn-load:hover{box-shadow:0 0 22px rgba(255,59,48,0.55);transform:translateY(-1px);}
+#btn-load:disabled{opacity:.5;cursor:wait;transform:none;}
+#status-dot{width:8px;height:8px;border-radius:50%;background:var(--text3);flex-shrink:0;transition:background .4s;}
+#status-dot.live{background:var(--green);box-shadow:0 0 8px var(--green);animation:blink 2s infinite;}
+#status-dot.loading{background:var(--yellow);animation:blink .6s infinite;}
+#status-dot.error{background:var(--red);}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+#status-txt{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);}
+
+/* LAYOUT */
+#app{display:flex;height:calc(100vh - 52px);}
+
+/* LEFT PANEL */
+#left{
+  width:260px;flex-shrink:0;background:var(--panel);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;z-index:10;
+}
+.panel-head{
+  padding:10px 14px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;justify-content:space-between;
+}
+.panel-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:13px;letter-spacing:2px;text-transform:uppercase;color:var(--text2);}
+.badge{font-family:'Share Tech Mono',monospace;font-size:11px;padding:2px 8px;border-radius:4px;}
+.badge.red{background:rgba(255,59,48,.15);color:var(--red);border:1px solid rgba(255,59,48,.3);}
+.badge.cyan{background:rgba(0,212,255,.1);color:var(--cyan);border:1px solid rgba(0,212,255,.2);}
+
+#summary-bar{padding:10px 14px;border-bottom:1px solid var(--border);display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;}
+.smb{background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:6px 8px;text-align:center;}
+.smb-val{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:20px;line-height:1;}
+.smb-val.r{color:var(--red);}
+.smb-val.o{color:var(--orange);}
+.smb-val.y{color:var(--yellow);}
+.smb-lab{font-size:8px;color:var(--text3);letter-spacing:.5px;margin-top:2px;}
+
+#filter-bar{padding:8px 14px;border-bottom:1px solid var(--border);display:flex;gap:6px;align-items:center;flex-wrap:wrap;}
+.flt-btn{
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;letter-spacing:1px;
+  padding:4px 10px;border-radius:4px;border:1px solid var(--border2);background:var(--bg2);
+  color:var(--text2);cursor:pointer;transition:all .15s;
+}
+.flt-btn.active.all{border-color:var(--cyan);color:var(--cyan);background:rgba(0,212,255,.08);}
+.flt-btn.active.hi{border-color:var(--red);color:var(--red);background:rgba(255,59,48,.08);}
+.flt-btn.active.med{border-color:var(--orange);color:var(--orange);background:rgba(255,107,26,.08);}
+.flt-btn.active.lo{border-color:var(--yellow);color:var(--yellow);background:rgba(255,199,0,.08);}
+
+#focos-list{flex:1;overflow-y:auto;padding:6px 8px;}
+#focos-list::-webkit-scrollbar{width:3px;}
+#focos-list::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
+.foco-card{
+  border:1px solid var(--border);border-radius:6px;padding:8px 10px;margin-bottom:5px;
+  cursor:pointer;transition:all .15s;background:var(--bg2);
+}
+.foco-card:hover{border-color:var(--border2);transform:translateX(2px);}
+.foco-card.hi{border-left:3px solid var(--red);}
+.foco-card.med{border-left:3px solid var(--orange);}
+.foco-card.lo{border-left:3px solid var(--yellow);}
+.foco-top{display:flex;align-items:center;justify-content:space-between;}
+.foco-lvl{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1px;}
+.foco-lvl.hi{color:var(--red);}
+.foco-lvl.med{color:var(--orange);}
+.foco-lvl.lo{color:var(--yellow);}
+.foco-frp{font-family:'Share Tech Mono',monospace;font-size:10px;color:var(--text2);}
+.foco-coords{font-family:'Share Tech Mono',monospace;font-size:9px;color:var(--text3);margin-top:2px;}
+.foco-bright{font-size:10px;color:var(--text2);margin-top:3px;}
+.no-data{padding:30px 20px;text-align:center;color:var(--text3);font-size:12px;line-height:1.8;}
+
+/* MAP */
+#map-wrap{flex:1;position:relative;}
+#map{height:100%;width:100%;}
+#map-controls{
+  position:absolute;top:10px;left:10px;z-index:500;
+  display:flex;flex-direction:column;gap:6px;
+}
+.mc-btn{
+  background:var(--panel);border:1px solid var(--border2);border-radius:6px;padding:6px 10px;
+  font-family:'Rajdhani',sans-serif;font-weight:600;font-size:11px;letter-spacing:1px;
+  color:var(--text2);cursor:pointer;transition:all .15s;white-space:nowrap;
+}
+.mc-btn:hover,.mc-btn.active{background:var(--border2);color:var(--text);}
+#legend{
+  position:absolute;bottom:24px;left:10px;z-index:500;
+  background:var(--panel);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;
+}
+.leg-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:1.5px;color:var(--text2);margin-bottom:8px;text-transform:uppercase;}
+.leg-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px;color:var(--text2);}
+.leg-dot{width:12px;height:12px;border-radius:50%;flex-shrink:0;}
+
+/* RIGHT PANEL */
+#right{
+  width:270px;flex-shrink:0;background:var(--panel);border-left:1px solid var(--border);
+  display:flex;flex-direction:column;overflow:hidden;
+}
+.sec{border-bottom:1px solid var(--border);padding:10px 14px;}
+.sec-title{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--text3);margin-bottom:8px;}
+#frp-gauge-wrap{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+#frp-val-big{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:36px;color:var(--orange);line-height:1;}
+#frp-unit{font-size:10px;color:var(--text3);line-height:1.4;}
+.bar-wrap{flex:1;}
+.bar-label{display:flex;justify-content:space-between;font-size:9px;color:var(--text3);margin-bottom:3px;font-family:'Share Tech Mono',monospace;}
+.bar-track{height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:3px;transition:width .5s ease;}
+.bar-fill.frp{background:linear-gradient(90deg,var(--yellow),var(--orange),var(--red));}
+.stat-row{display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--border);}
+.stat-row:last-child{border-bottom:none;}
+.stat-k{font-size:11px;color:var(--text2);}
+.stat-v{font-family:'Share Tech Mono',monospace;font-size:11px;color:var(--text);}
+.stat-v.r{color:var(--red);}
+.stat-v.o{color:var(--orange);}
+.stat-v.g{color:var(--green);}
+
+#risk-box{padding:12px;border-radius:8px;border:1px solid var(--border);margin-top:4px;transition:all .4s;}
+#risk-box.high{background:rgba(255,59,48,.08);border-color:rgba(255,59,48,.3);}
+#risk-box.med{background:rgba(255,107,26,.08);border-color:rgba(255,107,26,.3);}
+#risk-box.low{background:rgba(255,199,0,.08);border-color:rgba(255,199,0,.3);}
+#risk-box.none{background:var(--bg2);}
+#risk-icon{font-size:24px;margin-bottom:4px;}
+#risk-label{font-family:'Rajdhani',sans-serif;font-weight:700;font-size:18px;letter-spacing:2px;}
+#risk-desc{font-size:10px;color:var(--text2);margin-top:4px;line-height:1.5;}
+
+#console-area{flex:1;overflow-y:auto;padding:8px 10px;font-family:'Share Tech Mono',monospace;font-size:10px;line-height:1.7;}
+#console-area::-webkit-scrollbar{width:2px;}
+#console-area::-webkit-scrollbar-thumb{background:var(--border);}
+.log-line{color:var(--text3);}
+.log-line.ok{color:var(--green);}
+.log-line.warn{color:var(--yellow);}
+.log-line.err{color:var(--red);}
+.log-line.info{color:var(--cyan);}
+
+/* Leaflet overrides */
+.leaflet-control-zoom{border:1px solid var(--border2)!important;}
+.leaflet-control-zoom a{background:var(--panel)!important;color:var(--text)!important;border-bottom:1px solid var(--border2)!important;}
+.leaflet-control-zoom a:hover{background:var(--border2)!important;}
+.leaflet-control-attribution{background:rgba(10,11,14,.7)!important;color:var(--text3)!important;font-size:9px!important;}
+.leaflet-popup-content-wrapper{background:var(--panel);border:1px solid var(--border2);border-radius:8px;box-shadow:0 4px 24px rgba(0,0,0,.5);}
+.leaflet-popup-content{color:var(--text);font-family:'Barlow',sans-serif;font-size:12px;margin:10px 14px;}
+.leaflet-popup-tip{background:var(--panel);}
+.leaflet-popup-close-button{color:var(--text2)!important;}
+
+.spin{display:inline-block;animation:spin 1s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="tb-logo">
+    <div class="tb-logo-icon">🔥</div>
+    <div class="tb-logo-text">
+      <div class="t1">SIGAED FIRE</div>
+      <div class="t2">DETECCIÓN FOCOS TÉRMICOS — PATAGONIA</div>
+    </div>
+  </div>
+  <div class="tb-sep"></div>
+  <span class="tb-label">SENSOR</span>
+  <div class="tb-val">
+    <select id="sel-sensor">
+      <option value="VIIRS_NOAA20_NRT">VIIRS NOAA-20 NRT</option>
+      <option value="VIIRS_SNPP_NRT">VIIRS S-NPP NRT</option>
+      <option value="MODIS_NRT">MODIS NRT</option>
+    </select>
+  </div>
+  <span class="tb-label">PERÍODO</span>
+  <div class="tb-val">
+    <select id="sel-days">
+      <option value="1">24 hs</option>
+      <option value="2">48 hs</option>
+      <option value="5" selected>5 días</option>
+      <option value="7">7 días</option>
+      <option value="10">10 días</option>
+    </select>
+  </div>
+  <div class="tb-sep"></div>
+  <div id="status-dot"></div>
+  <span id="status-txt">Sin datos</span>
+  <button id="btn-load" onclick="loadData()">⟳ ACTUALIZAR</button>
+</div>
+
+<div id="app">
+
+  <div id="left">
+    <div class="panel-head">
+      <span class="panel-title">Focos activos</span>
+      <span class="badge red" id="badge-count">0 focos</span>
+    </div>
+    <div id="summary-bar">
+      <div class="smb"><div class="smb-val r" id="cnt-hi">0</div><div class="smb-lab">ALTO</div></div>
+      <div class="smb"><div class="smb-val o" id="cnt-med">0</div><div class="smb-lab">MEDIO</div></div>
+      <div class="smb"><div class="smb-val y" id="cnt-lo">0</div><div class="smb-lab">BAJO</div></div>
+    </div>
+    <div id="filter-bar">
+      <button class="flt-btn active all" onclick="setFilter('all',this)">TODOS</button>
+      <button class="flt-btn hi" onclick="setFilter('hi',this)">🔴 ALTO</button>
+      <button class="flt-btn med" onclick="setFilter('med',this)">🟠 MEDIO</button>
+      <button class="flt-btn lo" onclick="setFilter('lo',this)">🟡 BAJO</button>
+    </div>
+    <div id="focos-list">
+      <div class="no-data">Presioná <b>ACTUALIZAR</b><br>para cargar focos térmicos<br>en tiempo real desde NASA FIRMS</div>
+    </div>
+  </div>
+
+  <div id="map-wrap">
+    <div id="map"></div>
+    <div id="map-controls">
+      <button class="mc-btn active" id="btn-osm" onclick="setBase('osm')">🗺 Callejero</button>
+      <button class="mc-btn" id="btn-sat" onclick="setBase('sat')">🛰 Satélite</button>
+      <button class="mc-btn" id="btn-dark" onclick="setBase('dark')">🌑 Oscuro</button>
+    </div>
+    <div id="legend">
+      <div class="leg-title">Temperatura Ti4</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#ff3b30;box-shadow:0 0 6px #ff3b30"></div>Alto &gt; 350 K</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#ff6b1a;box-shadow:0 0 6px #ff6b1a"></div>Medio 320–350 K</div>
+      <div class="leg-row"><div class="leg-dot" style="background:#ffc700;box-shadow:0 0 6px #ffc700"></div>Bajo &lt; 320 K</div>
+    </div>
+  </div>
+
+  <div id="right">
+    <div class="panel-head">
+      <span class="panel-title">Análisis</span>
+      <span class="badge cyan" id="sel-label">—</span>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">Fire Radiative Power</div>
+      <div id="frp-gauge-wrap">
+        <div>
+          <div id="frp-val-big">—</div>
+          <div id="frp-unit">MW<br>potencia</div>
+        </div>
+        <div class="bar-wrap">
+          <div class="bar-label"><span>0</span><span>500 MW</span></div>
+          <div class="bar-track"><div class="bar-fill frp" id="frp-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="stat-row"><span class="stat-k">Temperatura Ti4</span><span class="stat-v" id="sv-bright">—</span></div>
+      <div class="stat-row"><span class="stat-k">Confianza</span><span class="stat-v" id="sv-conf">—</span></div>
+      <div class="stat-row"><span class="stat-k">Coordenadas</span><span class="stat-v" id="sv-coords" style="font-size:9px">—</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">Resumen regional</div>
+      <div class="stat-row"><span class="stat-k">Total focos</span><span class="stat-v" id="sv-total">—</span></div>
+      <div class="stat-row"><span class="stat-k">FRP máximo</span><span class="stat-v r" id="sv-frpmax">—</span></div>
+      <div class="stat-row"><span class="stat-k">FRP promedio</span><span class="stat-v o" id="sv-frpavg">—</span></div>
+      <div class="stat-row"><span class="stat-k">Temp. máxima</span><span class="stat-v r" id="sv-brightmax">—</span></div>
+      <div class="stat-row"><span class="stat-k">Alta confianza</span><span class="stat-v g" id="sv-hiconf">—</span></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">Evaluación de riesgo</div>
+      <div id="risk-box" class="none">
+        <div id="risk-icon">💤</div>
+        <div id="risk-label" style="color:var(--text3)">SIN DATOS</div>
+        <div id="risk-desc">Cargar datos para evaluar el riesgo operativo.</div>
+      </div>
+    </div>
+
+    <div class="panel-head" style="border-top:1px solid var(--border)">
+      <span class="panel-title">Consola</span>
+    </div>
+    <div id="console-area"><div class="log-line info">▶ SIGAED FIRE v1.0 — listo</div></div>
+  </div>
+
+</div>
+
+<script>
+const WORKER_URL = 'https://sigaed-worker.rickyvidela96.workers.dev';
+const BBOX = '-76,-56,-63,-36';
+
+let allFocos = [];
+let markers  = [];
+let currentFilter = 'all';
+let layer_osm, layer_sat, layer_dark;
+
+const map = L.map('map', {zoomControl:true, preferCanvas:true}).setView([-49.5, -69.5], 5);
+
+layer_osm  = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(map);
+layer_sat  = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'ESRI',maxZoom:19});
+layer_dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{attribution:'CartoDB',maxZoom:19});
+
+function setBase(b){
+  [layer_osm,layer_sat,layer_dark].forEach(l=>{ try{map.removeLayer(l);}catch(e){} });
+  document.querySelectorAll('#map-controls .mc-btn').forEach(x=>x.classList.remove('active'));
+  if(b==='sat'){layer_sat.addTo(map);document.getElementById('btn-sat').classList.add('active');}
+  else if(b==='dark'){layer_dark.addTo(map);document.getElementById('btn-dark').classList.add('active');}
+  else{layer_osm.addTo(map);document.getElementById('btn-osm').classList.add('active');}
+}
+
+function log(msg,cls){
+  const el=document.getElementById('console-area');
+  const ts=new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const d=document.createElement('div');
+  d.className='log-line '+(cls||'');
+  d.textContent=ts+' › '+msg;
+  el.appendChild(d);
+  el.scrollTop=el.scrollHeight;
+}
+
+function parseCSV(csv){
+  const lines=csv.split('\n');
+  if(lines.length<2) return [];
+  const headers=lines[0].split(',').map(h=>h.trim().toLowerCase().replace(/"/g,''));
+  const focos=[];
+  for(let i=1;i<lines.length;i++){
+    const l=lines[i].trim();
+    if(!l) continue;
+    const cols=l.split(',');
+    const obj={};
+    headers.forEach((h,idx)=>obj[h]=(cols[idx]||'').trim().replace(/"/g,''));
+    const lat=parseFloat(obj['latitude']||obj['lat']||0);
+    const lon=parseFloat(obj['longitude']||obj['lon']||0);
+    const bright=parseFloat(obj['bright_ti4']||obj['brightness']||0);
+    const frp=parseFloat(obj['frp']||0);
+    const conf=(obj['confidence']||'n').trim().toLowerCase();
+    if(!lat||!lon) continue;
+    let nivel='lo';
+    if(bright>350||frp>100) nivel='hi';
+    else if(bright>320||frp>30) nivel='med';
+    focos.push({lat,lon,bright,frp,conf,nivel});
+  }
+  return focos;
+}
+
+function colorFor(n){
+  if(n==='hi') return '#ff3b30';
+  if(n==='med') return '#ff6b1a';
+  return '#ffc700';
+}
+
+function confLabel(c){
+  if(c==='h'||c==='high') return '✅ Alta';
+  if(c==='l'||c==='low')  return '⚠️ Baja';
+  return '🔵 Nominal';
+}
+
+function renderMarkers(){
+  markers.forEach(m=>{ try{map.removeLayer(m);}catch(e){} });
+  markers=[];
+  const filtered=currentFilter==='all'?allFocos:allFocos.filter(f=>f.nivel===currentFilter);
+  filtered.forEach((f,idx)=>{
+    const color=colorFor(f.nivel);
+    const r=Math.max(Math.min(f.frp/4+5,22),5);
+    const m=L.circleMarker([f.lat,f.lon],{
+      radius:r,color:'transparent',fillColor:color,fillOpacity:.85
+    });
+    m.bindPopup(`
+      <div style="min-width:160px">
+        <div style="font-family:'Rajdhani',sans-serif;font-weight:700;font-size:15px;margin-bottom:6px">
+          🔥 Foco — <span style="color:${color}">${f.nivel.toUpperCase()}</span>
+        </div>
+        <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#8892a4;margin-bottom:6px">${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1e2330"><span style="color:#8892a4;font-size:11px">Ti4</span><span style="font-family:monospace;font-size:11px;color:${color}">${f.bright.toFixed(1)} K</span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #1e2330"><span style="color:#8892a4;font-size:11px">FRP</span><span style="font-family:monospace;font-size:11px;color:${color}">${f.frp.toFixed(1)} MW</span></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8892a4;font-size:11px">Conf.</span><span style="font-size:11px">${confLabel(f.conf)}</span></div>
+      </div>
+    `);
+    m.on('click',()=>selectFoco(f,idx+1));
+    m.addTo(map);
+    markers.push(m);
+  });
+}
+
+function renderList(){
+  const list=document.getElementById('focos-list');
+  const filtered=currentFilter==='all'?allFocos:allFocos.filter(f=>f.nivel===currentFilter);
+  if(!filtered.length){list.innerHTML='<div class="no-data">Sin focos para el filtro seleccionado.</div>';return;}
+  list.innerHTML='';
+  filtered.forEach((f,idx)=>{
+    const d=document.createElement('div');
+    d.className='foco-card '+f.nivel;
+    d.innerHTML=`
+      <div class="foco-top">
+        <span class="foco-lvl ${f.nivel}">${f.nivel.toUpperCase()}</span>
+        <span class="foco-frp">${f.frp.toFixed(1)} MW</span>
+      </div>
+      <div class="foco-coords">${f.lat.toFixed(4)}, ${f.lon.toFixed(4)}</div>
+      <div class="foco-bright">Ti4: ${f.bright.toFixed(1)} K · ${confLabel(f.conf)}</div>
+    `;
+    d.onclick=()=>{map.setView([f.lat,f.lon],10,{animate:true});selectFoco(f,idx+1);};
+    list.appendChild(d);
+  });
+}
+
+function selectFoco(f,num){
+  document.getElementById('sel-label').textContent='Foco #'+num;
+  document.getElementById('frp-val-big').textContent=f.frp.toFixed(1);
+  document.getElementById('frp-bar').style.width=Math.min(f.frp/500*100,100)+'%';
+  const color=colorFor(f.nivel);
+  document.getElementById('sv-bright').textContent=f.bright.toFixed(1)+' K';
+  document.getElementById('sv-bright').style.color=color;
+  document.getElementById('sv-conf').textContent=confLabel(f.conf);
+  document.getElementById('sv-coords').textContent=f.lat.toFixed(5)+', '+f.lon.toFixed(5);
+  updateRisk([f]);
+}
+
+function updateGlobalStats(){
+  const n=allFocos.length;
+  const hi=allFocos.filter(f=>f.nivel==='hi').length;
+  const med=allFocos.filter(f=>f.nivel==='med').length;
+  const lo=allFocos.filter(f=>f.nivel==='lo').length;
+  const frps=allFocos.map(f=>f.frp).filter(v=>v>0);
+  const brights=allFocos.map(f=>f.bright).filter(v=>v>0);
+  const hiConf=allFocos.filter(f=>f.conf==='h'||f.conf==='high').length;
+  document.getElementById('badge-count').textContent=n+' focos';
+  document.getElementById('cnt-hi').textContent=hi;
+  document.getElementById('cnt-med').textContent=med;
+  document.getElementById('cnt-lo').textContent=lo;
+  document.getElementById('sv-total').textContent=n;
+  document.getElementById('sv-frpmax').textContent=frps.length?(Math.max(...frps).toFixed(1)+' MW'):'—';
+  document.getElementById('sv-frpavg').textContent=frps.length?((frps.reduce((a,b)=>a+b,0)/frps.length).toFixed(1)+' MW'):'—';
+  document.getElementById('sv-brightmax').textContent=brights.length?(Math.max(...brights).toFixed(1)+' K'):'—';
+  document.getElementById('sv-hiconf').textContent=hiConf+' focos';
+  updateRisk(allFocos);
+}
+
+function updateRisk(focos){
+  const box=document.getElementById('risk-box');
+  const icon=document.getElementById('risk-icon');
+  const label=document.getElementById('risk-label');
+  const desc=document.getElementById('risk-desc');
+  if(!focos.length){
+    box.className='none';icon.textContent='💤';
+    label.style.color='var(--text3)';label.textContent='SIN DATOS';
+    desc.textContent='Sin focos detectados en la región.';return;
+  }
+  const hi=focos.filter(f=>f.nivel==='hi').length;
+  const med=focos.filter(f=>f.nivel==='med').length;
+  const maxFrp=Math.max(...focos.map(f=>f.frp));
+  if(hi>=3||maxFrp>200){
+    box.className='high';icon.textContent='🚨';
+    label.style.color='var(--red)';label.textContent='ALTO';
+    desc.textContent='Múltiples focos de alta intensidad. Activar protocolo PC. Notificar cadena de mando.';
+  } else if(hi>=1||med>=3||maxFrp>50){
+    box.className='med';icon.textContent='⚠️';
+    label.style.color='var(--orange)';label.textContent='MODERADO';
+    desc.textContent='Focos activos de intensidad moderada. Monitoreo continuo recomendado.';
+  } else {
+    box.className='low';icon.textContent='🟡';
+    label.style.color='var(--yellow)';label.textContent='BAJO';
+    desc.textContent='Focos de baja intensidad detectados. Mantener vigilancia pasiva.';
+  }
+}
+
+function setFilter(f,btn){
+  currentFilter=f;
+  document.querySelectorAll('.flt-btn').forEach(b=>b.className='flt-btn '+b.dataset.cls);
+  btn.classList.add('active',f);
+  renderMarkers();renderList();
+}
+
+async function loadData(){
+  const btn=document.getElementById('btn-load');
+  const dot=document.getElementById('status-dot');
+  const stxt=document.getElementById('status-txt');
+  btn.disabled=true;btn.innerHTML='<span class="spin">⟳</span> CARGANDO…';
+  dot.className='loading';stxt.textContent='Consultando NASA FIRMS…';
+  log('Iniciando consulta NASA FIRMS…','info');
+  const sensor=document.getElementById('sel-sensor').value;
+  const days=document.getElementById('sel-days').value;
+  const url=`${WORKER_URL}/firms/${sensor}/${BBOX}/${days}`;
+  log('Sensor: '+sensor,'info');
+  log('Período: últimas '+days+'d — Patagonia','info');
+  try{
+    const resp=await fetch(url);
+    if(!resp.ok) throw new Error('HTTP '+resp.status+' '+resp.statusText);
+    const csv=await resp.text();
+    log('Respuesta recibida ('+csv.length+' bytes)','ok');
+    allFocos=parseCSV(csv);
+    log(allFocos.length+' focos térmicos parseados','ok');
+    if(allFocos.length===0){
+      document.getElementById('focos-list').innerHTML='<div class="no-data">Sin focos detectados<br>en el período seleccionado.<br><small style="color:var(--text3)">Normal para días con baja actividad.</small></div>';
+      dot.className='live';stxt.textContent='Sin focos activos';
+      log('Región sin actividad ígnea detectable','warn');
+    } else {
+      renderMarkers();renderList();updateGlobalStats();
+      const hi=allFocos.filter(f=>f.nivel==='hi').length;
+      if(hi>0) log(hi+' foco(s) de ALTA intensidad — ATENCIÓN','warn');
+      dot.className='live';
+      stxt.textContent='Actualizado '+new Date().toLocaleTimeString('es-AR');
+      log('Visualización completa','ok');
+    }
+  } catch(err){
+    log('Error de red: '+err.message,'err');
+    dot.className='error';stxt.textContent='Error de conexión';
+    document.getElementById('focos-list').innerHTML=`<div class="no-data">⚠️ Error al conectar con NASA FIRMS.<br><small style="color:var(--text3)">${err.message}</small><br><br>Verificar conexión y API key.</div>`;
+  } finally{
+    btn.disabled=false;btn.innerHTML='⟳ ACTUALIZAR';
+  }
+}
+
+// dataset init para filtros
+document.querySelectorAll('.flt-btn').forEach(b=>{
+  const cls=b.classList.contains('all')?'all':b.classList.contains('hi')?'hi':b.classList.contains('med')?'med':'lo';
+  b.dataset.cls=cls;
+});
+
+window.addEventListener('load',()=>{
+  log('SIGAED FIRE v1.0 inicializado','ok');
+  log('Fuente: NASA FIRMS API — VIIRS NOAA-20','info');
+  log('Cobertura: Patagonia '+BBOX,'info');
+  setTimeout(loadData,600);
+});
+</script>
+</body>
+</html>
